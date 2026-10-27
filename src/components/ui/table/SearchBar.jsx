@@ -1,0 +1,652 @@
+import {
+    Search,
+    Check,
+    X,
+    Columns3,
+} from "lucide-react";
+
+import {
+    useMemo,
+    useRef,
+    useState,
+    useEffect,
+} from "react";
+
+import {
+    AnimatePresence,
+    motion as Motion,
+} from "framer-motion";
+
+import { useTableContext } from "./Table";
+
+function SearchBar() {
+    const {
+        search,
+        setSearch,
+        visibleColumns,
+    } = useTableContext();
+
+    // ---------------------------------------------------------
+    // INITIAL LOCAL STATE
+    // ---------------------------------------------------------
+
+    const [searchValue, setSearchValue] = useState(
+        search?.search || ""
+    );
+
+    const [selectedColumns, setSelectedColumns] =
+        useState(
+            Array.isArray(search?.search_fields)
+                ? search.search_fields
+                : []
+        );
+
+    const wrapperRef = useRef(null);
+
+    const [open, setOpen] = useState(false);
+
+    /*
+     * Keeps track of the last value that THIS component
+     * pushed into the context.
+     *
+     * This prevents:
+     *
+     * local state -> context -> local state -> context
+     *
+     * loops.
+     */
+    const lastPushedSearchRef = useRef({
+        search: search?.search || "",
+        search_fields: Array.isArray(
+            search?.search_fields
+        )
+            ? [...search.search_fields]
+            : [],
+    });
+
+    // ---------------------------------------------------------
+    // SEARCHABLE COLUMNS
+    // ---------------------------------------------------------
+
+    const searchableColumns = useMemo(() => {
+        return (
+            visibleColumns?.filter(
+                (column) =>
+                    column?.accessor &&
+                    column?.searchable === true
+            ) || []
+        );
+    }, [visibleColumns]);
+
+    // ---------------------------------------------------------
+    // EXPAND SEARCH
+    // ---------------------------------------------------------
+
+    const expanded =
+        selectedColumns.length > 0;
+
+    // ---------------------------------------------------------
+    // OUTSIDE CLICK
+    // ---------------------------------------------------------
+
+    useEffect(() => {
+        const handleOutside = (e) => {
+            if (
+                wrapperRef.current &&
+                !wrapperRef.current.contains(
+                    e.target
+                )
+            ) {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener(
+            "mousedown",
+            handleOutside
+        );
+
+        return () => {
+            document.removeEventListener(
+                "mousedown",
+                handleOutside
+            );
+        };
+    }, []);
+
+    // ---------------------------------------------------------
+    // TOGGLE COLUMN
+    // ---------------------------------------------------------
+
+    const toggleColumn = (accessor) => {
+        setSelectedColumns((prev) => {
+            if (prev.includes(accessor)) {
+                return prev.filter(
+                    (item) => item !== accessor
+                );
+            }
+
+            return [...prev, accessor];
+        });
+    };
+
+    // ---------------------------------------------------------
+    // REMOVE COLUMN
+    // ---------------------------------------------------------
+
+    const removeColumn = (accessor) => {
+        setSelectedColumns((prev) =>
+            prev.filter(
+                (column) => column !== accessor
+            )
+        );
+    };
+
+    // ---------------------------------------------------------
+    // CLEAR COLUMNS
+    // ---------------------------------------------------------
+
+    const clearColumns = () => {
+        setSelectedColumns([]);
+    };
+
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const value = searchValue.trim();
+
+            const nextFields = Array.isArray(selectedColumns)
+                ? selectedColumns
+                : [];
+
+            const last = lastPushedSearchRef.current;
+
+            const sameSearch = last.search === value;
+
+            const sameFields =
+                last.search_fields.length === nextFields.length &&
+                last.search_fields.every(
+                    (item, index) => item === nextFields[index]
+                );
+
+            if (sameSearch && sameFields) {
+                return;
+            }
+
+            lastPushedSearchRef.current = {
+                search: value,
+                search_fields: [...nextFields],
+            };
+
+            setSearch({
+                ...search,
+                search: value,
+                search_fields: [...nextFields],
+            });
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [searchValue, selectedColumns, search, setSearch]);
+    // ---------------------------------------------------------
+    // RENDER
+    // ---------------------------------------------------------
+
+    return (
+        <div
+            ref={wrapperRef}
+            className="relative w-full min-w-0 lg:w-auto"
+        >
+            {/* SEARCH WRAPPER */}
+            <Motion.div
+                layout
+                role="button"
+                tabIndex={0}
+                onClick={() => setOpen(true)}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setOpen(true);
+                    }
+                }}
+                transition={{
+                    type: "spring",
+                    stiffness: 260,
+                    damping: 24,
+                }}
+                className={`
+                    flex
+                    items-center
+                    gap-2
+                    min-h-10
+                    px-2
+                    py-1
+                    rounded-xl
+                    border
+                    bg-card/90
+                    backdrop-blur-xl
+                    shadow-sm
+                    transition-all
+                    duration-300
+
+                    ${expanded
+                        ? "w-full lg:w-[520px] border-primary shadow-lg"
+                        : "w-full lg:w-[160px] border-border hover:border-primary"
+                    }
+                `}
+            >
+                {/* SEARCH ICON */}
+                <div
+                    className={`
+                        flex
+                        items-center
+                        justify-center
+                        w-8
+                        h-8
+                        rounded-xl
+                        transition-all
+                        shrink-0
+
+                        ${expanded
+                            ? "bg-secondary text-secondary-foreground"
+                            : "bg-muted text-muted-foreground"
+                        }
+                    `}
+                >
+                    <Search className="w-4 h-4" />
+                </div>
+
+                {/* TAGS + INPUT */}
+                <div
+                    className="
+                        flex
+                        flex-wrap
+                        items-center
+                        gap-1.5
+                        flex-1
+                        py-1
+                        max-h-[88px]
+                        overflow-y-auto
+                        overflow-x-hidden
+                        scrollbar-thin
+                        scrollbar-thumb-border
+                        scrollbar-track-transparent
+                    "
+                >
+                    {/* TAGS */}
+                    <AnimatePresence>
+                        {selectedColumns.map(
+                            (accessor) => {
+                                const column =
+                                    searchableColumns.find(
+                                        (c) =>
+                                            c.accessor ===
+                                            accessor
+                                    );
+
+                                if (!column) {
+                                    return null;
+                                }
+
+                                const Icon =
+                                    column.icon;
+
+                                return (
+                                    <Motion.div
+                                        key={accessor}
+                                        layout
+                                        initial={{
+                                            opacity: 0,
+                                            scale: 0.8,
+                                            y: 4,
+                                        }}
+                                        animate={{
+                                            opacity: 1,
+                                            scale: 1,
+                                            y: 0,
+                                        }}
+                                        exit={{
+                                            opacity: 0,
+                                            scale: 0.8,
+                                        }}
+                                        transition={{
+                                            duration: 0.18,
+                                        }}
+                                        className="
+                                            flex
+                                            items-center
+                                            gap-1.5
+                                            h-8
+                                            px-2.5
+                                            rounded-xl
+                                            bg-secondary
+                                            border
+                                            border-border
+                                            text-secondary-foreground
+                                            text-xs
+                                            font-medium
+                                            shrink-0
+                                        "
+                                    >
+                                        {Icon && (
+                                            <Icon className="w-3.5 h-3.5" />
+                                        )}
+
+                                        <span className="whitespace-nowrap">
+                                            {
+                                                column.label
+                                            }
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                removeColumn(
+                                                    accessor
+                                                )
+                                            }
+                                            className="
+                                                flex
+                                                items-center
+                                                justify-center
+                                                w-4
+                                                h-4
+                                                rounded-full
+                                                hover:bg-accent
+                                                transition
+                                            "
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </Motion.div>
+                                );
+                            }
+                        )}
+                    </AnimatePresence>
+
+                    {/* INPUT */}
+                    <AnimatePresence>
+                        {expanded && (
+                            <Motion.input
+                                initial={{
+                                    opacity: 0,
+                                    width: 0,
+                                }}
+                                animate={{
+                                    opacity: 1,
+                                    width: "100%",
+                                }}
+                                exit={{
+                                    opacity: 0,
+                                    width: 0,
+                                }}
+                                transition={{
+                                    duration: 0.2,
+                                }}
+                                type="text"
+                                value={searchValue}
+                                onChange={(e) => {
+                                    setSearchValue(
+                                        e.target.value
+                                    );
+                                }}
+                                placeholder="Search..."
+                                className="
+                                    flex-1
+                                    min-w-[100px]
+                                    bg-transparent
+                                    z-[999]
+                                    text-sm
+                                    text-foreground
+                                    placeholder:text-muted-foreground
+                                    focus:outline-none
+                                "
+                            />
+                        )}
+                    </AnimatePresence>
+
+                    {/* EMPTY PLACEHOLDER */}
+                    {!expanded && (
+                        <Motion.span
+                            initial={{
+                                opacity: 0,
+                            }}
+                            animate={{
+                                opacity: 1,
+                            }}
+                            exit={{
+                                opacity: 0,
+                            }}
+                            className="
+                                text-sm
+                                text-muted-foreground
+                                whitespace-nowrap
+                            "
+                        >
+                            Search
+                        </Motion.span>
+                    )}
+                </div>
+
+                {/* COLUMN BUTTON */}
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setOpen((prev) => !prev);
+                    }}
+                    className={`
+                        flex
+                        items-center
+                        justify-center
+                        w-8
+                        h-8
+                        rounded-xl
+                        transition-all
+                        shrink-0
+
+                        ${open
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-muted"
+                        }
+                    `}
+                >
+                    <Columns3 className="w-4 h-4" />
+                </button>
+            </Motion.div>
+
+            {/* DROPDOWN */}
+            <AnimatePresence>
+                {open && (
+                    <Motion.div
+                        initial={{
+                            opacity: 0,
+                            y: -6,
+                            scale: 0.96,
+                        }}
+                        animate={{
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                        }}
+                        exit={{
+                            opacity: 0,
+                            y: -6,
+                            scale: 0.96,
+                        }}
+                        transition={{
+                            duration: 0.16,
+                        }}
+                        className="
+                            absolute
+                            top-[115%]
+                            right-0
+                            z-[999]
+                            w-[260px]
+                            max-w-[calc(100vw_-_2rem)]
+                        "
+                    >
+                        <div
+                            className="
+                                overflow-hidden
+                                rounded-2xl
+                                border
+                                border-border
+                                bg-popover
+                                text-popover-foreground
+                                shadow-2xl
+                            "
+                        >
+                            {/* HEADER */}
+                            <div
+                                className="
+                                    flex
+                                    items-center
+                                    justify-between
+                                    px-4
+                                    py-3
+                                    border-b
+                                    border-border
+                                "
+                            >
+                                <div>
+                                    <h3
+                                        className="
+                                            text-sm
+                                            font-semibold
+                                            text-foreground
+                                        "
+                                    >
+                                        Search Columns
+                                    </h3>
+
+                                    <p
+                                        className="
+                                            text-xs
+                                            text-muted-foreground
+                                            mt-0.5
+                                        "
+                                    >
+                                        Select columns
+                                    </p>
+                                </div>
+
+                                {selectedColumns.length >
+                                    0 && (
+                                        <button
+                                            type="button"
+                                            onClick={
+                                                clearColumns
+                                            }
+                                            className="
+                                            text-xs
+                                            font-medium
+                                            text-primary
+                                            hover:opacity-80
+                                        "
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                            </div>
+
+                            {/* COLUMN LIST */}
+                            <div
+                                className="
+                                    p-2
+                                    max-h-[300px]
+                                    overflow-y-auto
+                                "
+                            >
+                                {searchableColumns.map(
+                                    (column) => {
+                                        const active =
+                                            selectedColumns.includes(
+                                                column.accessor
+                                            );
+
+                                        const Icon =
+                                            column.icon;
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={
+                                                    column.accessor
+                                                }
+                                                onClick={() =>
+                                                    toggleColumn(
+                                                        column.accessor
+                                                    )
+                                                }
+                                                className={`
+                                                    w-full
+                                                    flex
+                                                    items-center
+                                                    justify-between
+                                                    px-3
+                                                    py-2.5
+                                                    rounded-xl
+                                                    text-sm
+                                                    transition-all
+
+                                                    ${active
+                                                        ? "bg-secondary text-secondary-foreground"
+                                                        : "hover:bg-muted text-foreground"
+                                                    }
+                                                `}
+                                            >
+                                                <div
+                                                    className="
+                                                        flex
+                                                        items-center
+                                                        gap-3
+                                                    "
+                                                >
+                                                    <div
+                                                        className={`
+                                                            flex
+                                                            items-center
+                                                            justify-center
+                                                            w-8
+                                                            h-8
+                                                            rounded-lg
+
+                                                            ${active
+                                                                ? "bg-accent"
+                                                                : "bg-muted"
+                                                            }
+                                                        `}
+                                                    >
+                                                        {Icon ? (
+                                                            <Icon className="w-4 h-4" />
+                                                        ) : (
+                                                            <Columns3 className="w-4 h-4" />
+                                                        )}
+                                                    </div>
+
+                                                    <span className="font-medium">
+                                                        {
+                                                            column.label
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                {active && (
+                                                    <Check className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        );
+                                    }
+                                )}
+                            </div>
+                        </div>
+                    </Motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+export default SearchBar;
